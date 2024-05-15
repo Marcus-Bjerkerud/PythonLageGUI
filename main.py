@@ -2,92 +2,93 @@ import sqlite3
 import csv
 from tkinter import *
 from tkinter import messagebox
+from tkinter import Button
 
-# Create a database connection
+
+# Lager en database tilkobling
 conn = sqlite3.connect('kundeDatabase.db')
 
-# Create a cursor
+# lager en cursor
 c = conn.cursor()
 
-# Create table
-c.execute("""CREATE TABLE IF NOT EXISTS customers (
-            customer_number integer,
-            name text,
-            email text,
-            phone_number integer,
-            postal_code integer,
-            city text
+# Lager en sql table
+c.execute("""CREATE TABLE IF NOT EXISTS Kunder (
+            kundenummer integer,
+            fname text,
+            ename text,
+            epost text,
+            tlf text,
+            postnummer text,
+            poststed text
             )""")
 
-# Commit changes
+# lagrer endringer
 conn.commit()
 
-# Load postal codes and cities from CSV
-postal_codes = {}
+# laster postnummer og poststeder i fra csv
+postnummer_csv = {}
 with open('postnummer.csv', 'r') as f:
-    reader = csv.reader(f)
-    next(reader)  # Skip header row
+    reader = csv.reader(f, delimiter=';')
+    next(reader)  # hopper over øverste rad
     for row in reader:
         if len(row) >= 2:
-            postal_codes[row[0]] = row[1]
+            postnummer_csv[row[0]] = row[1]
 
-# Load customers from CSV
-def load_customers_from_csv():
+def Lastkunder():
     with open('kunder.csv', 'r') as f:
-        reader = csv.reader(f)
-        next(reader)  # Skip header row
+        reader = csv.reader(f, delimiter=';')
+        next(reader)  # skip the header row
         for row in reader:
-            if len(row) >= 6:
-                customer_number, name, email, phone_number, postal_code, city = row
-                c.execute("INSERT INTO customers VALUES (:customer_number, :name, :email, :phone_number, :postal_code, :city)",
-                          {
-                              'customer_number': customer_number,
-                              'name': name,
-                              'email': email,
-                              'phone_number': phone_number,
-                              'postal_code': postal_code,
-                              'city': city
-                          })
-        conn.commit()
+            if len(row) >= 5:
+                kundenummer, fname, ename, epost, tlf, postnummer = row
+                poststed = postnummer_csv.get(postnummer, "")
+                
+                # Sjekker om kunden finnes i databasen
+                c.execute("SELECT * FROM Kunder WHERE kundenummer = :kundenummer", {'kundenummer': kundenummer})
+                if c.fetchone() is None:
+                    # Hvis kunden ikke finnes i databasen så blir den lagt til
+                    c.execute("INSERT INTO Kunder (kundenummer, fname, ename, epost, tlf, postnummer, poststed) VALUES (:kundenummer, :fname, :ename, :epost, :tlf, :postnummer, :poststed)",
+                              {
+                                  'kundenummer': kundenummer,
+                                  'fname': fname,
+                                  'ename': ename,
+                                  'epost': epost,
+                                  'tlf': tlf,
+                                  'postnummer': postnummer,
+                                  'poststed': poststed
+                              })
+                    conn.commit()
 
-load_customers_from_csv()
-
-# Define functions for database handling
-def add_customer():
-    if postal_code.get() in postal_codes and postal_codes[postal_code.get()] == city.get():
-        conn = sqlite3.connect('kundeDatabase.db')
-        c = conn.cursor()
-        c.execute("INSERT INTO customers VALUES (:customer_number, :name, :email, :phone_number, :postal_code, :city)",
+Lastkunder()
+# Definer funksjoner for databasehåndtering
+def LeggTilKunder():
+    if postnummer.get() in postnummer and postnummer[postnummer.get()] == poststed.get():
+        c.execute("INSERT INTO Kunder Verdier (:kundenummer, :fname, :ename, :epost, :tlf, :postnummer, :poststed)",
                   {
-                      'customer_number': customer_number.get(),
-                      'name': name.get(),
-                      'email': email.get(),
-                      'phone_number': phone_number.get(),
-                      'postal_code': postal_code.get(),
-                      'city': city.get()
+                      'kundenummer': kundenummer.get(),
+                      'fname': fname.get(),
+                      'ename': ename.get(),
+                      'epost': epost.get(),
+                      'tlf': tlf.get(),
+                      'postnummer': postnummer.get(),
+                      'poststed': poststed.get()
                   })
         conn.commit()
-        conn.close()
     else:
-        messagebox.showerror("Error", "Invalid postal code or city")
+        messagebox.showerror("Error", "Dette postnummeret eller poststedet er ikke gyldig")
 
-def delete_customer():
-    conn = sqlite3.connect('kundeDatabase.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM customers WHERE customer_number=?", (delete_box.get(),))
+def SlettKunder():
+    c.execute("SELECT * FROM Kunder WHERE kundenummer=?", (delete_box.get(),))
     if c.fetchone() is not None:
-        c.execute("DELETE from customers WHERE customer_number=?", (delete_box.get(),))
-        messagebox.showinfo("Success", "Customer deleted successfully")
+        c.execute("DELETE from Kunder WHERE kundenummer=?", (delete_box.get(),))
+        messagebox.showinfo("Velykket", "Kunden er slettet")
     else:
-        messagebox.showerror("Error", "No such customer found")
+        messagebox.showerror("Error", "Denne kunden er ikke funnet")
     delete_box.delete(0, END)
     conn.commit()
-    conn.close()
 
 def query():
-    conn = sqlite3.connect('kundeDatabase.db')
-    c = conn.cursor()
-    c.execute("SELECT *, oid FROM customers WHERE customer_number=? OR name=? OR email=? OR phone_number=?", 
+    c.execute("SELECT *, oid FROM Kunder WHERE kundenummer=? OR fname=? OR ename=? OR epost=? OR tlf=?", 
               (search_box.get(), search_box.get(), search_box.get(), search_box.get()))
     records = c.fetchall()
     if records:
@@ -97,27 +98,29 @@ def query():
         query_label = Label(root, text=print_records)
         query_label.grid(row=12, column=0, columnspan=2)
     else:
-        messagebox.showerror("Error", "No such customer found")
+        messagebox.showerror("Error", "Denne kunden er ikke funnet")
     conn.commit()
     conn.close()
 
-# Create GUI with Tkinter
+# Lag GUI med Tkinter
 root = Tk()
-root.title('Customer Database')
+root.title('Kunde Database')
 
-# Create Text Boxes
-customer_number = Entry(root, width=30)
-customer_number.grid(row=0, column=1, padx=20)
-name = Entry(root, width=30)
-name.grid(row=1, column=1)
-email = Entry(root, width=30)
-email.grid(row=2, column=1)
-phone_number = Entry(root, width=30)
-phone_number.grid(row=3, column=1)
-postal_code = Entry(root, width=30)
-postal_code.grid(row=4, column=1)
-city = Entry(root, width=30)
-city.grid(row=5, column=1)
+# Lag tekst boks
+kundenummer = Entry(root, width=30)
+kundenummer.grid(row=0, column=1, padx=20)
+fname = Entry(root, width=30)
+fname.grid(row=1, column=1)
+ename = Entry(root, width=30)
+ename.grid(row=2, column=1)
+epost = Entry(root, width=30)
+epost.grid(row=3, column=1)
+tlf = Entry(root, width=30)
+tlf.grid(row=4, column=1)
+postnummer = Entry(root, width=30)
+postnummer.grid(row=5, column=1)
+poststed = Entry(root, width=30)
+poststed.grid(row=6, column=1)
 
 delete_box = Entry(root, width=30)
 delete_box.grid(row=9, column=1, pady=5)
@@ -125,36 +128,38 @@ delete_box.grid(row=9, column=1, pady=5)
 search_box = Entry(root, width=30)
 search_box.grid(row=11, column=1, pady=5)
 
-# Create Text Box Labels
-customer_number_label = Label(root, text="Customer Number")
-customer_number_label.grid(row=0, column=0)
-name_label = Label(root, text="Name")
-name_label.grid(row=1, column=0)
-email_label = Label(root, text="Email")
-email_label.grid(row=2, column=0)
-phone_number_label = Label(root, text="Phone Number")
-phone_number_label.grid(row=3, column=0)
-postal_code_label = Label(root, text="Postal Code")
-postal_code_label.grid(row=4, column=0)
-city_label = Label(root, text="City")
-city_label.grid(row=5, column=0)
+# Lag tekst box bakgrunnstekst
+kundenummer_label = Label(root, text="Kundenummer")
+kundenummer_label.grid(row=0, column=0)
+fname_label = Label(root, text="Fornavn")
+fname_label.grid(row=1, column=0)
+ename_label = Label(root, text="Etternavn")
+ename_label.grid(row=2, column=0)
+epost_label = Label(root, text="Epost")
+epost_label.grid(row=3, column=0)
+tlf_label = Label(root, text="Telefonnummer")
+tlf_label.grid(row=4, column=0)
+postnummer_label = Label(root, text="Postnummer")
+postnummer_label.grid(row=5, column=0)
+poststed = Label(root, text="Poststed")
+poststed.grid(row=6, column=0)
 
-delete_box_label = Label(root, text="Delete Customer Number")
+delete_box_label = Label(root, text="Slett kunde")
 delete_box_label.grid(row=9, column=0)
 
-search_box_label = Label(root, text="Search Customer")
+search_box_label = Label(root, text="Søk etter kunde")
 search_box_label.grid(row=11, column=0)
 
-# Create Submit Button
-submit_btn = Button(root, text="Add Customer to Database", command=add_customer)
+# Lag en submit knapp
+submit_btn = Button(root, text="Legg kunde til i databasen", command=LeggTilKunder)
 submit_btn.grid(row=6, column=0, columnspan=2, pady=10, padx=10, ipadx=100)
 
-# Create a Delete Button
-delete_btn = Button(root, text="Delete Customer", command=delete_customer)
+# Lag en delete knapp
+delete_btn = Button(root, text="Slett kunde", command=SlettKunder)
 delete_btn.grid(row=10, column=0, columnspan=2, pady=10, padx=10, ipadx=136)
 
-# Create a Query Button
-query_btn = Button(root, text="Search Customer", command=query)
+# lag en query knapp
+query_btn = Button(root, text="Søk etter kunde", command=query)
 query_btn.grid(row=12, column=0, columnspan=2, pady=10, padx=10, ipadx=143)
 
 root.mainloop()
